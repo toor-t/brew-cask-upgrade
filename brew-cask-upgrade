@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# from http://qiita.com/2k0ri/items/9fe8d33a72dbfb15fe6b
+# mod by toor-t 2017/05/22
+
+argv=($@);
+argc=${#argv[@]};
+i=0;
+force="false";
+dryrun="false";
+apps=$(brew cask list);
+updateapps=();
+
+#debug
+#echo "argv = ${argv[@]}";
+#echo "argc = $argc";
+#echo "apps = ${apps}";
+#echo "updateapps = $updateapps";
+
+#引数チェック
+if [ $argc -gt 0 ];then
+    argc=$(($argc - 1));
+    for i in `seq 0 $argc`;do
+        #debug
+        #echo "i = $i";
+
+        if [ "${argv[$i]}" = "-f" ];then
+            # Force upgrade
+            force="true";
+        elif [ "${argv[$i]}" = "-n" ];then
+            # Dry run
+            dryrun="true";
+        else
+            found="false";
+            for app in ${apps[@]};do
+                #debug
+                #echo "app = ${app}";
+
+                if [ "${app}" = "${argv[$i]}" ];then
+                    # Update対象
+                    updateapps+=("${app}");
+                    #debug
+                    #echo "updateapps = ${updateapps[@]}";
+                    found="true";
+                    break;
+                fi;
+            done;
+
+            if [ "${found}" = "false" ];then
+                #インストールされていない
+                echo "[Error] ${argv[$i]} is not installed.";
+                #return;
+                exit -1;
+            fi;
+        fi;
+    done;
+    
+    if [ ${#updateapps[@]} = 0 ];then
+        #アプリが指定されていないのですべてのアプリをアップデートする
+        updateapps=("${apps[@]}");
+    fi;       
+else
+    #すべてのアプリをアップデートする
+    updateapps=("${apps[@]}");
+fi;
+
+#debug
+#echo "updateapps = ${updateapps[@]}";
+
+#アップデート
+for app in ${updateapps[@]};do 
+    latest="$(brew cask info "${app}" | awk 'NR==1{print $2}')";
+    versions=($(\ls -1 "/usr/local/Caskroom/${app}/.metadata/"));
+    current=$(echo ${versions} | awk '{print $NF}');
+    if [[ "${latest}" = "latest" ]];then 
+        echo "[!] ${app}: ${current} == ${latest}";
+        [[ "${force}" = "true" ]] && [[ "${dryrun}" = "false" ]] && brew cask install "${app}" --force;
+        continue;
+    elif [[ "${current}" = "${latest}" ]];then 
+        echo "[=] ${app}: ${current} == ${latest}";
+        continue;
+    fi;
+    echo "[+] ${app}: ${current} -> ${latest}";
+    if [ "${dryrun}" = "false" ];then
+        # Update
+        brew cask uninstall "${app}" --force; 
+        brew cask install "${app}";
+    fi;
+done;
+
+# End
